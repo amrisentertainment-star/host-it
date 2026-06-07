@@ -1,8 +1,11 @@
 const express = require('express');
 const { Server } = require('socket.io');
 const http = require('http');
-const { WebcastPushConnection } = require('tiktok-live-connect');
+const { WebcastPushConnection } = require('tiktok-live-connector'); // Corrected name
 const cors = require('cors');
+
+const app = express();
+// ... (rest of the code from before stays the same)
 
 const app = express();
 app.use(cors());
