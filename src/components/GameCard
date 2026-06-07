@@ -1,3 +1,6 @@
+'use client';
+import React from 'react';
+
 type Props = {
   title: string;
   description: string;
@@ -13,14 +16,12 @@ export default function GameCard({
 }: Props) {
   return (
     <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 hover:scale-[1.02] transition-all">
-
+      {/* GLOW BACKGROUND */}
       <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-fuchsia-500/5" />
 
       <div className="relative z-10">
-
         <div className="flex items-center justify-between">
-
-          <h3 className="text-2xl font-black">
+          <h3 className="text-2xl font-black text-white">
             {title}
           </h3>
 
