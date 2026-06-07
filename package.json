@@ -1,37 +1,15 @@
 {
-  "name": "crowd-control-platform",
-  "version": "0.1.0",
-  "private": true,
+  "name": "host-it-backend",
+  "version": "1.0.0",
+  "description": "TikTok Live Game Bridge",
+  "main": "server.js",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "node server.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
-    "framer-motion": "^12.40.0",
-    "has-flag": "^5.0.1",
-    "howler": "^2.2.4",
-    "lucide-react": "^1.17.0",
-    "next": "16.2.6",
-    "qrcode": "^1.5.4",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
-    "tiktok-live-connector": "^2.1.1-beta1"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/howler": "^2.2.13",
-    "@types/node": "^20.19.41",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "tiktok-live-connect": "^1.1.0",
+    "cors": "^2.8.5"
   }
 }
