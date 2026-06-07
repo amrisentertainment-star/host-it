@@ -15,9 +15,9 @@
     "socket.io-client": "^4.7.5",
     "tiktok-live-connector": "^1.2.3",
     "cors": "^2.8.5",
-    "tailwindcss": "3.4.10",
-    "postcss": "8.4.41",
-    "autoprefixer": "10.4.20",
+    "tailwindcss": "3.4.1",
+    "postcss": "8.4.31",
+    "autoprefixer": "10.4.14",
     "lucide-react": "latest"
   }
 }
