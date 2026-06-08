@@ -56,19 +56,16 @@ type TikTokGift = {
 
 const ROUND_TARGETS = [5, 4, 3, 2, 1, 1];
 
-// --- MAIN COMPONENT ---
 export default function BeatTheBankerSessionPage({
   params,
 }: {
   params: Promise<{ sessionid: string }>;
 }) {
-  // 1. Resolve params (Next.js 15 pattern)
   const resolvedParams = use(params);
   const sessionid = resolvedParams.sessionid;
 
-  // 2. States
+  // --- STATES ---
   const [controller, setController] = useState<ControlRow | null>(null);
-  const [queue, setQueue] = useState<ControlRow[]>([]);
   const [openedBoxes, setOpenedBoxes] = useState<BoxStateRow[]>([]);
   const [hiddenRewards, setHiddenRewards] = useState<RewardRow[]>([]);
   const [boxes, setBoxes] = useState<string[]>([]);
@@ -84,70 +81,54 @@ export default function BeatTheBankerSessionPage({
   const [giftCatalog, setGiftCatalog] = useState<TikTokGift[]>([]);
   const [jackpotExplosion, setJackpotExplosion] = useState(false);
 
-  // 3. Audio Refs
+  // --- REFS ---
   const bankerAudio = useRef<HTMLAudioElement | null>(null);
   const openAudio = useRef<HTMLAudioElement | null>(null);
   const jackpotAudio = useRef<HTMLAudioElement | null>(null);
-  const dealAudio = useRef<HTMLAudioElement | null>(null);
-  const noDealAudio = useRef<HTMLAudioElement | null>(null);
 
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // --- DATA LOADING FUNCTIONS ---
-  async function loadStreamerSettings() {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/streamer_game_settings?session_id=eq.${sessionid}&limit=1`, {
-        headers: { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    const data = await res.json();
-    if (data?.length) setSettings(data[0]);
-  }
+  // --- DATA FETCHERS ---
+  const loadInitialData = async () => {
+    const headers = { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` };
+    
+    // Load Settings
+    const sRes = await fetch(`${SUPABASE_URL}/rest/v1/streamer_game_settings?session_id=eq.${sessionid}&limit=1`, { headers });
+    const sData = await sRes.json();
+    if (sData?.length) setSettings(sData[0]);
 
-  async function loadGiftCatalog() {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/tiktok_gifts?active=eq.true&order=gift_value.asc`, {
-        headers: { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    setGiftCatalog(await res.json());
-  }
+    // Load Catalog
+    const cRes = await fetch(`${SUPABASE_URL}/rest/v1/tiktok_gifts?active=eq.true`, { headers });
+    setGiftCatalog(await cRes.json());
 
-  async function loadGameConfig() {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/game_config?session_id=eq.${sessionid}`, {
-        headers: { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    const data = await res.json();
-    const count = data?.[0]?.box_count || 22;
-    const generated = Array.from({ length: count }, (_, i) => `box ${i + 1}`);
-    setBoxes(generated);
-  }
+    // Load Rewards
+    const rRes = await fetch(`${SUPABASE_URL}/rest/v1/mystery_box_rewards?session_id=eq.${sessionid}`, { headers });
+    setHiddenRewards(await rRes.json());
+    
+    // Load Game Config (Boxes)
+    const confRes = await fetch(`${SUPABASE_URL}/rest/v1/game_config?session_id=eq.${sessionid}`, { headers });
+    const confData = await confRes.json();
+    const count = confData?.[0]?.box_count || 22;
+    setBoxes(Array.from({ length: count }, (_, i) => `box ${i + 1}`));
+  };
 
-  async function loadController() {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/game_control?session_id=eq.${sessionid}&order=queue_position.asc`, {
-        headers: { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    const data = await res.json();
-    setController(data?.[0] || null);
-    setQueue(data || []);
-  }
+  const pollDynamicData = async () => {
+    const headers = { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` };
+    
+    const [ctrlRes, boxRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/game_control?session_id=eq.${sessionid}&order=queue_position.asc`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/mystery_box_state?session_id=eq.${sessionid}`, { headers })
+    ]);
 
-  async function loadBoxes() {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/mystery_box_state?session_id=eq.${sessionid}`, {
-        headers: { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    setOpenedBoxes(await res.json());
-  }
+    setController((await ctrlRes.json())?.[0] || null);
+    setOpenedBoxes(await boxRes.json());
+  };
 
-  async function loadRewards() {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/mystery_box_rewards?session_id=eq.${sessionid}`, {
-        headers: { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    const data = await res.json();
-    setHiddenRewards(data);
-  }
-
-  // --- GAME LOGIC ---
+  // --- LOGIC ---
   const remainingRewards = useMemo(() => {
     if (!hiddenRewards.length) return [];
-    return hiddenRewards.filter((reward) => {
+    return [...hiddenRewards].sort((a,b) => a.box_name.localeCompare(b.box_name, undefined, {numeric: true})).filter((reward) => {
       if (controller?.player_box && reward.box_name === controller.player_box) return false;
       return !openedBoxes.find((o) => o.opened_box === reward.box_name);
     });
@@ -156,111 +137,132 @@ export default function BeatTheBankerSessionPage({
   function calculateBankerOffer() {
     const values = remainingRewards.map((r) => Number(r.reward.replace(/[^\d]/g, ""))).filter((v) => !isNaN(v));
     const total = values.reduce((sum, val) => sum + val, 0);
-    const remaining = remainingRewards.length;
-    let multiplier = remaining <= 2 ? 0.9 : remaining <= 5 ? 0.75 : remaining <= 9 ? 0.55 : 0.2;
-    return Math.round(total * multiplier);
+    const count = remainingRewards.length;
+    let mult = count <= 2 ? 0.9 : count <= 5 ? 0.75 : count <= 10 ? 0.5 : 0.2;
+    return Math.round(total * mult);
   }
 
-  async function resetGame() {
-    await fetch(`${SUPABASE_URL}/rest/v1/game_control?session_id=eq.${sessionid}`, {
-        method: "DELETE",
-        headers: { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    await fetch(`${SUPABASE_URL}/rest/v1/mystery_box_state?session_id=eq.${sessionid}`, {
-        method: "DELETE",
-        headers: { apikey: SUPABASE_KEY as string, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    setMessage("RESET");
+  function getRarityStyles(reward: string) {
+    const gift = giftCatalog.find(g => g.gift_name === reward);
+    if (!gift) return "border-zinc-700 bg-zinc-800/50 text-zinc-400";
+    if (gift.rarity === 'legendary') return "border-yellow-500 bg-yellow-500/20 text-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.2)]";
+    if (gift.rarity === 'rare') return "border-fuchsia-500 bg-fuchsia-500/20 text-fuchsia-300";
+    return "border-cyan-500/50 bg-cyan-500/10 text-cyan-300";
   }
 
   // --- EFFECTS ---
   useEffect(() => {
-    bankerAudio.current = new Audio("/sounds/banker-phone.mp3");
-    openAudio.current = new Audio("/sounds/box-open.mp3");
-    jackpotAudio.current = new Audio("/sounds/jackpot.mp3");
-    dealAudio.current = new Audio("/sounds/deal.mp3");
-    noDealAudio.current = new Audio("/sounds/no-deal.mp3");
-  }, []);
-
-  useEffect(() => {
-    // Initial Load
-    loadGameConfig();
-    loadRewards();
-    loadGiftCatalog();
-    loadController();
-    loadBoxes();
-
-    const interval = setInterval(() => {
-        loadController();
-        loadBoxes();
-    }, 2000);
-
+    loadInitialData();
+    const interval = setInterval(pollDynamicData, 2000);
     return () => clearInterval(interval);
   }, [sessionid]);
 
-  // --- RENDER HELPERS ---
+  useEffect(() => {
+    bankerAudio.current = new Audio("/sounds/banker-phone.mp3");
+    openAudio.current = new Audio("/sounds/box-open.mp3");
+    jackpotAudio.current = new Audio("/sounds/jackpot.mp3");
+  }, []);
+
   const visibleBoxes = boxes.filter((box) => box !== controller?.player_box);
-  const leftRewards = remainingRewards.filter((_, index) => index % 2 === 0);
-  const rightRewards = remainingRewards.filter((_, index) => index % 2 !== 0);
+  const leftRewards = remainingRewards.filter((_, i) => i % 2 === 0);
+  const rightRewards = remainingRewards.filter((_, i) => i % 2 !== 0);
 
   return (
-    <main className="min-h-screen bg-slate-900 text-white p-6 relative">
-       {/* UI Elements (Show Banker, Final Reveal, etc.) */}
-       {showBanker && (
-          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
-            <div className="bg-slate-800 border-4 border-yellow-500 p-10 rounded-3xl text-center">
-              <h2 className="text-4xl font-black text-yellow-500 mb-4 tracking-tighter">BANKER OFFER</h2>
-              <div className="text-6xl font-black mb-6">{calculateBankerOffer()}</div>
-              <div className="flex gap-4 justify-center font-bold">
-                <span className="text-green-400">DEAL</span>
-                <span className="text-red-400">NO DEAL</span>
-              </div>
-            </div>
-          </div>
-       )}
+    <main className="min-h-screen bg-[#0a0a0a] text-white p-4 overflow-hidden relative font-sans">
+      {/* GLOW DECORATION */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_-20%,#22d3ee20,transparent_50%)] pointer-events-none" />
 
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-4xl font-black text-yellow-400 tracking-tighter italic">BEAT THE BANKER</h1>
-        <button onClick={resetGame} className="px-4 py-2 border border-red-500 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all text-sm font-bold">RESET</button>
+      {/* OVERLAYS */}
+      {bankerCalling && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center animate-in fade-in duration-500">
+          <div className="text-center">
+            <div className="text-9xl mb-8 animate-bounce">☎️</div>
+            <h1 className="text-6xl font-black text-yellow-400 tracking-tighter">BANKER CALLING</h1>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER */}
+      <div className="flex justify-between items-end mb-8 px-4 relative z-10">
+        <div>
+          <h1 className="text-5xl font-black italic tracking-tighter bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+            BEAT THE BANKER
+          </h1>
+          <p className="text-cyan-400 font-bold text-sm tracking-widest uppercase mt-1 opacity-80">{message}</p>
+        </div>
+        <div className="text-right">
+             <p className="text-zinc-500 text-xs font-bold uppercase mb-1">Session ID</p>
+             <p className="text-zinc-300 font-mono text-sm bg-white/5 px-3 py-1 rounded-lg border border-white/10 uppercase">{sessionid}</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_300px] gap-6">
-        {/* PRIZES REMAINING */}
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
-          <h2 className="text-sm font-bold text-zinc-500 uppercase mb-4">Prizes Remaining</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-2">{leftRewards.map(r => <div key={r.id} className="bg-blue-500/10 border border-blue-500/20 p-2 text-center rounded-lg text-xs font-bold">{r.reward}</div>)}</div>
-            <div className="space-y-2">{rightRewards.map(r => <div key={r.id} className="bg-red-500/10 border border-red-500/20 p-2 text-center rounded-lg text-xs font-bold">{r.reward}</div>)}</div>
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-6 relative z-10">
+        
+        {/* LEFT: PRIZES */}
+        <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-[32px] p-6 flex flex-col h-[75vh]">
+          <h2 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-6 text-center">Prizes Remaining</h2>
+          <div className="grid grid-cols-2 gap-3 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-2">
+              {leftRewards.map(r => (
+                <div key={r.id} className={`border-2 rounded-xl py-3 px-2 text-center text-[10px] font-black transition-all ${getRarityStyles(r.reward)}`}>
+                  {r.reward.toUpperCase()}
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              {rightRewards.map(r => (
+                <div key={r.id} className={`border-2 rounded-xl py-3 px-2 text-center text-[10px] font-black transition-all ${getRarityStyles(r.reward)}`}>
+                  {r.reward.toUpperCase()}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* GAME BOARD */}
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 flex flex-col items-center">
-          <div className="mb-8 text-center bg-yellow-400/10 border border-yellow-400/20 p-6 rounded-2xl w-full">
-            <p className="text-xs font-bold text-yellow-500 uppercase mb-1">Contestant Box</p>
-            <p className="text-4xl font-black text-white">{controller?.player_box || '??'}</p>
+        {/* CENTER: BOARD */}
+        <div className="flex flex-col items-center">
+          {/* PLAYER BOX */}
+          <div className="mb-10 text-center relative group">
+            <div className="absolute -inset-4 bg-yellow-500/20 blur-2xl rounded-full opacity-50 group-hover:opacity-100 transition-all" />
+            <div className="relative bg-gradient-to-b from-yellow-300 to-yellow-600 border-4 border-yellow-200 w-48 h-56 rounded-[40px] flex flex-col items-center justify-center shadow-[0_20px_50px_rgba(234,179,8,0.3)]">
+                <span className="text-black/50 font-black text-xs uppercase tracking-tighter">Player Safe</span>
+                <span className="text-7xl font-black text-black leading-none my-2">
+                    {controller?.player_box ? controller.player_box.replace('box ', '') : '?'}
+                </span>
+                <div className="bg-black/10 px-4 py-1 rounded-full text-[10px] font-bold text-black uppercase">Secure</div>
+            </div>
           </div>
-          <div className="grid grid-cols-5 gap-3 w-full">
+
+          <div className="grid grid-cols-5 gap-3 w-full max-w-2xl px-4">
             {visibleBoxes.map(box => (
               <Box key={box} box={box} openedBoxes={openedBoxes} openingBox={openingBox} />
             ))}
           </div>
         </div>
 
-        {/* STATUS */}
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
-          <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Contestant</p>
-          <p className="text-xl font-black text-cyan-400 mb-6">@{controller?.username || 'WAITING'}</p>
-          
-          <div className="space-y-4">
-             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase">Current Round</p>
-                <p className="text-2xl font-black">{controller?.current_round || 1}</p>
-             </div>
-             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase">Offer</p>
-                <p className="text-2xl font-black text-yellow-400">{calculateBankerOffer()}</p>
-             </div>
+        {/* RIGHT: CONTROLS */}
+        <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-[32px] p-8 flex flex-col gap-6">
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest">Current Contestant</p>
+            <h3 className="text-3xl font-black text-white truncate">@{controller?.username || 'Waiting...'}</h3>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Round</p>
+                <p className="text-3xl font-black text-white">{controller?.current_round || 1}</p>
+            </div>
+            <div className="bg-white/5 rounded-2xl p-4 border border-white/5 text-right">
+                <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Left</p>
+                <p className="text-3xl font-black text-white">{boxes.length - openedBoxes.length}</p>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-yellow-500/10 to-transparent rounded-3xl p-6 border border-yellow-500/20 mt-auto">
+            <p className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mb-1">Banker Offer</p>
+            <p className="text-5xl font-black text-yellow-400">
+                {calculateBankerOffer()}
+            </p>
           </div>
         </div>
       </div>
@@ -270,9 +272,20 @@ export default function BeatTheBankerSessionPage({
 
 function Box({ box, openedBoxes, openingBox }: any) {
   const opened = openedBoxes.find((b: any) => b.opened_box === box);
+  const isOpening = openingBox === box;
+
   return (
-    <div className={`h-16 rounded-xl border-2 flex items-center justify-center font-black text-sm transition-all ${opened ? 'bg-zinc-800 border-zinc-700 text-zinc-600' : 'bg-yellow-500 border-yellow-400 text-black shadow-lg shadow-yellow-500/10'}`}>
-      {opened ? 'OPEN' : box.replace('box ', '')}
+    <div className={`
+      aspect-square rounded-2xl border-4 flex flex-col items-center justify-center transition-all duration-500
+      ${opened 
+        ? 'bg-zinc-800/80 border-zinc-700 text-zinc-600 scale-95 opacity-50' 
+        : isOpening 
+        ? 'bg-cyan-400 border-white scale-110 animate-pulse shadow-[0_0_30px_#22d3ee]' 
+        : 'bg-gradient-to-b from-yellow-400 to-yellow-600 border-yellow-300 text-black shadow-lg hover:scale-105 active:scale-95 cursor-pointer'}
+    `}>
+      <span className={`font-black tracking-tighter ${opened ? 'text-[8px]' : 'text-2xl'}`}>
+        {opened ? 'OPENED' : box.replace('box ', '')}
+      </span>
     </div>
   );
 }
