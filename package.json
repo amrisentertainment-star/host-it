@@ -6,7 +6,7 @@
     "build": "next build",
     "start": "next start"
   },
-  "dependencies": {
+    "dependencies": {
     "next": "15.0.7",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -15,9 +15,9 @@
     "socket.io-client": "^4.7.5",
     "tiktok-live-connector": "^1.2.3",
     "cors": "^2.8.5",
-    "tailwindcss": "3.4.1",
-    "postcss": "8.4.31",
-    "autoprefixer": "10.4.14",
+    "tailwindcss": "3.4.14",
+    "postcss": "8.4.47",
+    "autoprefixer": "10.4.20",
     "lucide-react": "latest"
   },
   "devDependencies": {
